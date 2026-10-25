@@ -1,0 +1,234 @@
+# wall-e
+
+**A small coding robot, written in Perl.**
+
+wall-e is a Linux-first, CLI-only coding agent. Give it a task and it can read
+files, make changes, run commands, and work through the results using your
+OpenAI API key.
+
+Named for **Larry Wall** and **WALL-E**: a little robot that gets to work.
+
+## Why wall-e?
+
+A coding agent does not need a large software stack to be useful. wall-e starts
+with one Perl executable, four tools, and a direct connection to your model
+provider. No Node.js, npm, OpenAI SDK, or agent framework.
+
+The goal is a small dependency tree and source you can actually read. Fewer
+moving parts mean fewer things to install, update, audit, and trust. That reduces
+the attack surface; it does not make the software immune to vulnerabilities.
+
+wall-e's security focus is the software you install. What you build, which
+commands you authorize, and how you isolate the agent are up to you.
+
+## Current status
+
+Early prototype. The core agent loop and tools have automated tests, but live
+API compatibility has not yet been verified with an account. This is a starting
+point, not a hardened release.
+
+Implemented:
+
+- Interactive conversation and one-shot tasks.
+- OpenAI Responses API with function tools and optional reasoning effort.
+- File reading, writing, exact-text editing, and shell execution.
+- Approval prompts, with `--yes` for unattended execution.
+- Command timeouts, bounded tool output, and a per-turn step limit.
+- In-memory conversation history and root `AGENTS.md` instructions.
+
+No telemetry, automatic updates, plugin downloads, provider relay, or background
+service. The executable connects to the endpoint you configure.
+
+## Requirements
+
+- Linux with Perl **5.20+** and `/bin/sh`.
+- An API key and model supporting OpenAI Responses function tools.
+- The Perl modules below, including their dependencies.
+
+| Module | Minimum version | Purpose |
+| --- | --- | --- |
+| `HTTP::Tiny` | 0.080 | HTTP requests; part of Perl core, although older installations may need an update |
+| `IO::Socket::SSL` | 2.056 | HTTPS support |
+| `Mozilla::CA` | Unspecified | CA certificate bundle; currently declared in `cpanfile` |
+
+All other modules used by the executable are Perl core modules. Tests use core
+`Test::More` and temporary files/processes.
+
+Prefer packages from your distribution's repositories. Package names and
+versions vary by distribution and release; check the installed module versions
+against `cpanfile`. CPAN installation is also supported:
+
+```sh
+cpanm --installdeps .
+```
+
+Using the operating system's CA trust store without an explicit `Mozilla::CA`
+dependency is a planned change; it is not implemented in this version.
+
+## Quick start
+
+From the source directory, after installing the dependencies:
+
+```sh
+export OPENAI_API_KEY='your-api-key'
+export OPENAI_MODEL='your-api-model-id'
+
+./wall-e --help
+./wall-e 'Explain this repository'
+```
+
+Use the exact API model ID available to your account. The intended target is
+OpenAI 5.6-generation models and later; support depends on the selected model's
+Responses API and tool capabilities, rather than a version-number check.
+
+To put the executable on your PATH:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+install -m 755 wall-e "$HOME/.local/bin/wall-e"
+```
+
+Then work from your project directory:
+
+```sh
+cd /path/to/project
+
+# Start an interactive conversation.
+wall-e
+
+# Complete one task and exit.
+wall-e 'Find the failing test and fix it'
+
+# Choose a model and reasoning effort explicitly.
+wall-e --model MODEL_ID --reasoning medium 'Review the last commit'
+
+# Allow shell commands and file changes without approval prompts.
+wall-e --yes 'Run the tests and fix the failure'
+
+# Read a task from stdin.
+printf '%s\n' 'Explain this repository' | wall-e
+```
+
+When a task argument is supplied, it is used as the prompt. Stdin is read as the
+task only when no task argument is supplied.
+
+## Terminal behavior
+
+Output stays in the terminal's normal scrollback. There is no mouse interface,
+alternate-screen layout, or fullscreen dashboard. Your terminal emulator
+controls the scrollback buffer size.
+
+Model text goes to stdout. Tool activity, approval prompts, and errors go to
+stderr. Responses currently print when each API request completes.
+
+In interactive mode:
+
+| Command | Action |
+| --- | --- |
+| `/new` | Clear conversation context |
+| `/quit` | Exit |
+| Ctrl-D | Exit at the input prompt |
+
+## Tools
+
+| Tool | Behavior |
+| --- | --- |
+| `read` | Read up to 64 KiB of UTF-8 text |
+| `write` | Create or overwrite a UTF-8 file; parent directory must exist |
+| `edit` | Replace exactly one occurrence of text; reject missing or ambiguous matches; files up to 1 MiB |
+| `shell` | Run `/bin/sh -c`; capture combined stdout/stderr, exit status, and signal |
+
+Read calls run automatically. Shell calls and file changes require `y` or `yes`
+unless `--yes` is set. Without a terminal, these actions are denied unless
+`--yes` is explicit. Tool failures and denials are returned to the model.
+
+Each shell call starts in wall-e's working directory with fresh shell state.
+Use `cd subdir && ...` within a command when needed. Commands receive no
+interactive stdin.
+
+## Configuration
+
+| Option | Environment / default |
+| --- | --- |
+| `--model MODEL` | `OPENAI_MODEL`; required |
+| `--base-url URL` | `OPENAI_BASE_URL`; defaults to `https://api.openai.com/v1` |
+| `--reasoning EFFORT` | Omitted by default; passed through to the selected model |
+| `--yes`, `-y` | Approve shell calls and file changes automatically |
+| `--timeout N` | Shell timeout in seconds; default `60` |
+| `--max-steps N` | API calls per user turn; default `30` |
+| `--help`, `-h` | Show usage and exit |
+
+Set the API key through `OPENAI_API_KEY`. wall-e does not save it to a
+configuration file. Shell commands inherit the process environment, including
+that key.
+
+Custom endpoints must support `/responses`. HTTPS is required except for HTTP
+on `localhost` or `127.0.0.1` for testing. TLS certificate verification is enabled
+and HTTP redirects are disabled. HTTP requests have a 180-second timeout and
+are not automatically retried.
+
+## Instructions and context
+
+The built-in developer prompt is short and can be inspected in the executable.
+It describes the working directory, asks the model to inspect before editing,
+follow project instructions, and report what it actually verified.
+
+Root `AGENTS.md`, when present, is appended to those instructions. The model is
+asked to read applicable nested `AGENTS.md` files; nested discovery is not
+programmatically enforced. Instruction files are read as text, not executed as
+extensions.
+
+Conversation history exists only in memory. API requests use `store: false` and
+replay response items, including encrypted reasoning and linked tool results.
+This flag is not a guarantee about a provider's broader retention policies.
+
+There is no automatic compaction or session resume. Use `/new` to start fresh.
+Interactive API or step-limit errors clear context; any actions already
+performed remain in effect. One-shot errors exit nonzero.
+
+## Execution boundaries
+
+wall-e runs with your user's permissions. File tools can access paths outside
+the working directory. An approved shell command has the same access as a
+command you run yourself. Approval prompts are not a sandbox or a defense
+against every form of prompt injection.
+
+Choose your own container, VM, user account, or other isolation if you need it.
+The harness does not attempt to decide which development tasks are acceptable.
+
+Prompts, instructions, file contents, and command output included in the
+conversation are sent to your configured provider. Choose an endpoint you
+trust.
+
+Shell output returned to the model is capped at 64 KiB. Commands stop when the
+timeout or observed 1 MiB capture limit is reached. Process-group cleanup does
+not contain deliberately detached processes, and these limits are not OS
+resource quotas.
+
+## Development
+
+```sh
+perl -c wall-e
+prove -v t
+```
+
+The tests use a mock HTTP client and real temporary files/processes. They do
+not require an API key or spend tokens. They cover the tool loop, Unicode,
+reasoning replay, denied actions, edit failures, command capture, timeouts,
+output truncation, and the step limit.
+
+Keep changes small, dependencies justified, and behavior visible. No build
+pipeline is needed to run the executable.
+
+## Direction
+
+Near-term improvements should preserve the small, Linux-first distribution:
+
+- Distro-native CA trust and fewer explicit CPAN dependencies.
+- Optional ANSI colors that respect redirected output and `NO_COLOR`.
+- Streaming text in the terminal's normal scrollback.
+- Optional line editing and prompt history.
+- A replaceable or removable built-in prompt.
+
+These are planned, not current command-line features. There is no bundled
+plugin marketplace, executable project extension system, or self-updater.
