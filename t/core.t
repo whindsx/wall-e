@@ -6,6 +6,7 @@ use Test::More;
 use File::Temp qw(tempdir);
 use Cwd qw(getcwd abs_path);
 use JSON::PP qw(encode_json decode_json);
+use IO::Socket::INET;
 require './wall-e';
 my $dir = tempdir(CLEANUP=>1);
 my $cwd = getcwd();
@@ -36,6 +37,8 @@ is(length($large->{output}),65536,'output bounded');
     local *STDIN = $empty;
     like(call('write',path=>'denied',content=>'oops')->{error},qr/denied/,'deny without terminal');
     ok(!-e 'denied','denied action has no effect');
+    is($agent->{denied},1,'denial counted');
+    delete $agent->{denied};
 }
 {
     package MockHTTP;
@@ -97,6 +100,46 @@ like((eval { check_base('ftp://gpu-box/v1', 1) }, $@), qr/https:\/\//, 'other sc
     local *STDERR = $err;
     is(check_base('http://gpu-box:8080/v1', 1), 'http://gpu-box:8080/v1', 'remote HTTP allowed explicitly');
     like($warn, qr/cleartext/, 'explicit HTTP warns');
+}
+# End to end: run the executable against a local server that asks for one write.
+sub serve {
+    my @bodies = @_;
+    my $server = IO::Socket::INET->new(LocalAddr=>'127.0.0.1', LocalPort=>0, Listen=>5, ReuseAddr=>1) or die $!;
+    my $pid = fork() // die $!;
+    if (!$pid) {
+        for my $body (@bodies) {
+            my $c = $server->accept or last;
+            my $len = 0;
+            while (my $line = <$c>) { $len = $1 if $line =~ /^Content-Length:\s*(\d+)/i; last if $line eq "\r\n" }
+            read $c, my $ignored, $len;
+            print {$c} "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ", length($body), "\r\nConnection: close\r\n\r\n", $body;
+            close $c;
+        }
+        POSIX::_exit(0);
+    }
+    return ($pid, 'http://127.0.0.1:' . $server->sockport . '/v1');
+}
+sub run_walle {
+    my ($base, @args) = @_;
+    my $out = `WALLE_BASE_URL=$base WALLE_MODEL=m '$cwd/wall-e' @args </dev/null 2>&1`;
+    return ($? >> 8, $out);
+}
+my $write_call = encode_json({status=>'completed', output=>[{type=>'function_call',id=>'f',call_id=>'c',name=>'write',arguments=>'{"path":"e2e.txt","content":"x"}'}]});
+my $final = encode_json({status=>'completed', output=>[{type=>'message',role=>'assistant',content=>[{type=>'output_text',text=>'Done'}]}]});
+{
+    my ($pid, $base) = serve($write_call, $final);
+    my ($code, $out) = run_walle($base, "'write a file'");
+    waitpid $pid, 0;
+    is($code, 2, 'one-shot exits 2 when an action was denied');
+    like($out, qr/1 tool call\(s\) denied.*--yes/, 'denial reported');
+    ok(!-e 'e2e.txt', 'denied write did not happen');
+}
+{
+    my ($pid, $base) = serve($write_call, $final);
+    my ($code) = run_walle($base, '--yes', "'write a file'");
+    waitpid $pid, 0;
+    is($code, 0, 'one-shot exits 0 when actions ran');
+    ok(-e 'e2e.txt', 'approved write happened');
 }
 chdir $cwd or die $!;
 done_testing;

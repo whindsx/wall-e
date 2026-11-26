@@ -197,7 +197,12 @@ This flag is not a guarantee about a provider's broader retention policies.
 
 There is no automatic compaction or session resume. Use `/new` to start fresh.
 Interactive API or step-limit errors clear context; any actions already
-performed remain in effect. One-shot errors exit nonzero.
+performed remain in effect.
+
+One-shot runs exit `0` on success and `1` on errors (API failure, step limit,
+bad options). They exit `2` if any shell call or file change was denied,
+including automatic denial when there is no terminal and `--yes` is not set,
+because the task did not run as asked.
 
 ## Execution boundaries
 

@@ -116,7 +116,7 @@ sub execute {
         die "Unknown tool: $name\n" unless $fields{$name};
         for (@{$fields{$name}}) { die "Missing/string argument required: $_\n" if !defined($a->{$_}) || ref($a->{$_}) }
         print STDERR "[$name] ", ($a->{path} // $a->{command}), "\n";
-        if ($name ne 'read' && !approve($self, $name, $a)) { return {error=>'User denied tool execution. Do not retry without a new user instruction.'} }
+        if ($name ne 'read' && !approve($self, $name, $a)) { $self->{denied}++; return {error=>'User denied tool execution. Do not retry without a new user instruction.'} }
         return {output=>read_file($a->{path}, 65536)} if $name eq 'read';
         return {output=>write_file($a->{path}, $a->{content})} if $name eq 'write';
         if ($name eq 'edit') {
@@ -216,6 +216,11 @@ sub main {
         my $prompt = @args ? join(' ', @args) : do { local $/; <STDIN> };
         die "Empty task\n" unless defined($prompt) && $prompt =~ /\S/;
         turn(\%o, \@history, $prompt);
+        # Denied actions mean the task did not run as asked; let scripts see that.
+        if ($o{denied}) {
+            print STDERR "$o{denied} tool call(s) denied", (-t STDIN ? '' : ' (no terminal for approval; use --yes)'), "\n";
+            return 2;
+        }
         return 0;
     }
     print STDERR "wall-e ($o{model}) — /new, /quit; Ctrl-C exits\n";
@@ -240,7 +245,9 @@ unless (caller) {
     binmode STDOUT, ':encoding(UTF-8)';
     binmode STDERR, ':encoding(UTF-8)';
     $| = 1;
-    my $ok = eval { main(@ARGV); 1 };
+    my $code;
+    my $ok = eval { $code = main(@ARGV); 1 };
     if (!$ok) { print STDERR $@; exit 1 }
+    exit($code // 0);
 }
 1;
