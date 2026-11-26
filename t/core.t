@@ -73,5 +73,17 @@ $agent->{max_steps}=1;
 $agent->{http}=bless {requests=>[]}, 'MockHTTP';
 eval { turn($agent, [], 'read again') };
 like($@,qr/Step limit/,'loop budget enforced');
+is(check_base('https://api.example.com/v1/'), 'https://api.example.com/v1', 'HTTPS accepted, slash trimmed');
+is(check_base('http://localhost:8080/v1'), 'http://localhost:8080/v1', 'HTTP localhost accepted');
+like((eval { check_base('http://gpu-box:8080/v1') }, $@), qr/--allow-http/, 'remote HTTP refused by default');
+like((eval { check_base('http://localhost.evil.com/v1') }, $@), qr/--allow-http/, 'localhost prefix is not local');
+like((eval { check_base('ftp://gpu-box/v1', 1) }, $@), qr/https:\/\//, 'other schemes refused');
+{
+    my $warn = '';
+    open my $err, '>', \$warn or die $!;
+    local *STDERR = $err;
+    is(check_base('http://gpu-box:8080/v1', 1), 'http://gpu-box:8080/v1', 'remote HTTP allowed explicitly');
+    like($warn, qr/cleartext/, 'explicit HTTP warns');
+}
 chdir $cwd or die $!;
 done_testing;

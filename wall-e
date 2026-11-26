@@ -173,16 +173,26 @@ sub turn {
     }
     die "Step limit reached. Start a new task or increase --max-steps.\n";
 }
+sub check_base {
+    my ($base, $allow_http) = @_;
+    $base =~ s{/+$}{};
+    return $base if $base =~ m{\Ahttps://[^/]}i;
+    die "Base URL must use https:// (or http:// with --allow-http)\n" unless $base =~ m{\Ahttp://[^/]}i;
+    return $base if $base =~ m{\Ahttp://(?:localhost|127\.0\.0\.1)(?::\d+)?(?:/|$)}i;
+    die "Refusing unencrypted HTTP to a non-local host; pass --allow-http to permit it\n" unless $allow_http;
+    print STDERR "Warning: unencrypted HTTP; prompts, tool output and the API key are sent in cleartext to $base\n";
+    return $base;
+}
 sub main {
     my @args = @_;
     my %o = (model=>$ENV{OPENAI_MODEL}, base=>$ENV{OPENAI_BASE_URL} // 'https://api.openai.com/v1',
         timeout=>60, max_steps=>30);
     GetOptionsFromArray(\@args, 'model=s'=>\$o{model}, 'base-url=s'=>\$o{base}, 'reasoning=s'=>\$o{reasoning},
-        'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
+        'allow-http'=>\$o{allow_http}, 'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
     if ($o{help}) {
         print "Usage: wall-e --model MODEL [--yes] [--reasoning EFFORT] [TASK ...]\n",
             "No task: interactive chat on a terminal, or read task from stdin.\n",
-            "Options: --base-url URL --timeout SECONDS --max-steps N\n",
+            "Options: --base-url URL --allow-http --timeout SECONDS --max-steps N\n",
             "Environment: OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL\n",
             "Commands: /new (clear context), /quit. Mutating tools require approval.\n";
         return 0;
@@ -190,9 +200,7 @@ sub main {
     die "Set OPENAI_MODEL or pass --model with your API model ID\n" unless $o{model};
     $o{key} = $ENV{OPENAI_API_KEY} or die "Set OPENAI_API_KEY\n";
     die "timeout and max-steps must be positive\n" unless $o{timeout}>0 && $o{max_steps}>0;
-    $o{base} =~ s{/+$}{};
-    die "Base URL must use HTTPS (HTTP allowed only for localhost tests)\n"
-        unless $o{base} =~ m{\Ahttps://} || $o{base} =~ m{\Ahttp://(?:localhost|127\.0\.0\.1)(?::\d+)?(?:/|$)};
+    $o{base} = check_base($o{base}, $o{allow_http});
     $o{http} = HTTP::Tiny->new(timeout=>180, verify_SSL=>1, max_redirect=>0);
     $o{instructions} = 'You are a concise CLI coding agent. Work in ' . getcwd() .
         '. Inspect before editing; make minimal changes and run relevant checks. Use tools to do the work. ' .

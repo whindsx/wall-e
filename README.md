@@ -152,6 +152,7 @@ interactive stdin.
 | --- | --- |
 | `--model MODEL` | `OPENAI_MODEL`; required |
 | `--base-url URL` | `OPENAI_BASE_URL`; defaults to `https://api.openai.com/v1` |
+| `--allow-http` | Permit plain HTTP to a non-local `--base-url`; off by default |
 | `--reasoning EFFORT` | Omitted by default; passed through to the selected model |
 | `--yes`, `-y` | Approve shell calls and file changes automatically |
 | `--timeout N` | Shell timeout in seconds; default `60` |
@@ -162,8 +163,12 @@ Set the API key through `OPENAI_API_KEY`. wall-e does not save it to a
 configuration file. Shell commands inherit the process environment, including
 that key.
 
-Custom endpoints must support `/responses`. HTTPS is required except for HTTP
-on `localhost` or `127.0.0.1` for testing. TLS certificate verification is enabled
+Custom endpoints must support `/responses`. HTTPS is required, except for HTTP
+on `localhost` or `127.0.0.1`. To use a plain-HTTP server elsewhere, such as a
+local model on your LAN, pass `--allow-http` on the command line; there is no
+environment variable or config file for it. wall-e then prints a warning, since
+prompts, file contents, command output and the API key travel unencrypted. Use
+it only on a network you trust. TLS certificate verification is enabled
 and HTTP redirects are disabled. HTTP requests have a 180-second timeout and
 are not automatically retried.
 
