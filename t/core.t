@@ -70,6 +70,8 @@ my $first=$http->{requests}[0]{body};
 ok(!$first->{store},'stateless requests');
 is_deeply($first->{include},['reasoning.encrypted_content'],'request encrypted reasoning');
 is($first->{tools}[0]{type},'function','Responses tool schema');
+is_deeply([map { $_->{name} } @{$first->{tools}}],[qw(read write edit shell)],'all tools offered by default');
+is_deeply([map { $_->{name} } @{tools(1)}],['read'],'read-only offers only read');
 my $second=$http->{requests}[1]{body};
 is($second->{input}[1]{encrypted_content},'opaque','reasoning replayed');
 is($second->{input}[3]{call_id},'c1','tool result linked');
@@ -134,6 +136,7 @@ my $final = encode_json({status=>'completed', output=>[{type=>'message',role=>'a
     waitpid $pid, 0;
     is($code, 2, 'one-shot exits 2 when an action was denied');
     like($out, qr/1 tool call\(s\) denied.*--yes/, 'denial reported');
+    like($out, qr/Read-only/, 'read-only mode announced');
     ok(!-e 'e2e.txt', 'denied write did not happen');
 }
 {

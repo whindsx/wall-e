@@ -143,8 +143,12 @@ In interactive mode:
 | `shell` | Run `/bin/sh -c`; capture combined stdout/stderr, exit status, and signal |
 
 Read calls run automatically. Shell calls and file changes require `y` or `yes`
-unless `--yes` is set. Without a terminal, these actions are denied unless
-`--yes` is explicit. Tool failures and denials are returned to the model.
+unless `--yes` is set. Tool failures and denials are returned to the model.
+
+Without a terminal to ask on, and without `--yes`, the run is read-only: the
+model is offered only the `read` tool and told it cannot run commands or change
+files, and wall-e notes this on stderr. Any other tool call it makes anyway is
+refused.
 
 Each shell call starts in wall-e's working directory with fresh shell state.
 Use `cd subdir && ...` within a command when needed. Commands receive no
@@ -201,8 +205,8 @@ performed remain in effect.
 
 One-shot runs exit `0` on success and `1` on errors (API failure, step limit,
 bad options). They exit `2` if any shell call or file change was denied,
-including automatic denial when there is no terminal and `--yes` is not set,
-because the task did not run as asked.
+because the task did not run as asked. A read-only run (no terminal, no
+`--yes`) that only reads exits `0`; pass `--yes` when a script expects changes.
 
 ## Execution boundaries
 
