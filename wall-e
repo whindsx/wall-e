@@ -50,14 +50,18 @@ sub write_file {
     close $fh or die "close $path: $!\n";
     return 'Written';
 }
-sub approve {
+# Returns undef when allowed, otherwise the reason given to the model.
+sub denial {
     my ($self, $name, $args) = @_;
-    return 1 if $self->{yes};
+    return undef if $self->{yes};
     # Never consume a piped task as approval.
-    return 0 unless -t STDIN;
+    return 'Not run: no terminal is available to ask the user for approval, and --yes is not set. ' .
+        'Every shell command and file change will be refused the same way, so do not retry; ' .
+        'finish with the read tool or report what you would have done.' unless -t STDIN;
     print STDERR "\n$name ", JSON::PP->new->canonical->encode($args), "\nAllow? [y/N] ";
     my $answer = <STDIN>;
-    return defined($answer) && $answer =~ /^y(?:es)?\s*$/i;
+    return undef if defined($answer) && $answer =~ /^y(?:es)?\s*$/i;
+    return 'User denied tool execution. Do not retry without a new user instruction.';
 }
 sub shell {
     my ($self, $command) = @_;
@@ -116,7 +120,7 @@ sub execute {
         die "Unknown tool: $name\n" unless $fields{$name};
         for (@{$fields{$name}}) { die "Missing/string argument required: $_\n" if !defined($a->{$_}) || ref($a->{$_}) }
         print STDERR "[$name] ", ($a->{path} // $a->{command}), "\n";
-        if ($name ne 'read' && !approve($self, $name, $a)) { $self->{denied}++; return {error=>'User denied tool execution. Do not retry without a new user instruction.'} }
+        if ($name ne 'read' and my $why = denial($self, $name, $a)) { $self->{denied}++; return {error=>$why} }
         return {output=>read_file($a->{path}, 65536)} if $name eq 'read';
         return {output=>write_file($a->{path}, $a->{content})} if $name eq 'write';
         if ($name eq 'edit') {
