@@ -41,7 +41,7 @@ is(length($large->{output}),65536,'output bounded');
     package MockHTTP;
     sub post {
         my ($self,$url,$request)=@_;
-        push @{$self->{requests}}, {url=>$url, body=>JSON::PP::decode_json($request->{content})};
+        push @{$self->{requests}}, {url=>$url, headers=>$request->{headers}, body=>JSON::PP::decode_json($request->{content})};
         my $output = @{$self->{requests}} == 1
             ? [{type=>'reasoning',id=>'r1',summary=>[],encrypted_content=>'opaque'},
                {type=>'function_call',id=>'f1',call_id=>'c1',name=>'read',arguments=>'{"path":"unicode.txt"}'}]
@@ -69,6 +69,19 @@ my $second=$http->{requests}[1]{body};
 is($second->{input}[1]{encrypted_content},'opaque','reasoning replayed');
 is($second->{input}[3]{call_id},'c1','tool result linked');
 is(decode_json(Encode::encode('UTF-8',$second->{input}[3]{output}))->{output},'café','tool Unicode survives nested JSON');
+is($http->{requests}[0]{headers}{Authorization},'Bearer fake','key sent as bearer token');
+{
+    local $agent->{key};
+    local $agent->{http}=bless {requests=>[]}, 'MockHTTP';
+    open my $sink,'>',\my $ignored or die $!;
+    local *STDOUT=$sink;
+    turn($agent,[],'no key');
+    ok(!exists $agent->{http}{requests}[0]{headers}{Authorization},'no Authorization header without key');
+}
+{
+    local $ENV{WALLE_API_KEY}='secret-value';
+    is(call('shell',command=>'printf "%s" "${WALLE_API_KEY-unset}"')->{output},'unset','key hidden from shell commands');
+}
 $agent->{max_steps}=1;
 $agent->{http}=bless {requests=>[]}, 'MockHTTP';
 eval { turn($agent, [], 'read again') };

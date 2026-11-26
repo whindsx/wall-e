@@ -69,6 +69,7 @@ sub shell {
         open STDIN, '<', '/dev/null' or POSIX::_exit(126);
         open STDOUT, '>&', $fh or POSIX::_exit(126);
         open STDERR, '>&', $fh or POSIX::_exit(126);
+        delete $ENV{WALLE_API_KEY};
         exec '/bin/sh', '-c', $command or POSIX::_exit(127);
     }
     my ($status, $reason);
@@ -139,7 +140,7 @@ sub request {
         store=>JSON::PP::false, include=>['reasoning.encrypted_content'] };
     $body->{reasoning} = {effort=>$self->{reasoning}} if $self->{reasoning};
     my $res = $self->{http}->post("$self->{base}/responses", {
-        headers=>{'Content-Type'=>'application/json', Authorization=>"Bearer $self->{key}"},
+        headers=>{'Content-Type'=>'application/json', ($self->{key} ? (Authorization=>"Bearer $self->{key}") : ())},
         content=>encode_json($body) });
     die "HTTP $res->{status} $res->{reason}: " . substr($res->{content} // '',0,2000) . "\n" unless $res->{success};
     my $data = decode_json($res->{content});
@@ -180,12 +181,12 @@ sub check_base {
     die "Base URL must use https:// (or http:// with --allow-http)\n" unless $base =~ m{\Ahttp://[^/]}i;
     return $base if $base =~ m{\Ahttp://(?:localhost|127\.0\.0\.1)(?::\d+)?(?:/|$)}i;
     die "Refusing unencrypted HTTP to a non-local host; pass --allow-http to permit it\n" unless $allow_http;
-    print STDERR "Warning: unencrypted HTTP; prompts, tool output and the API key are sent in cleartext to $base\n";
+    print STDERR "Warning: unencrypted HTTP; prompts, tool output and any API key are sent in cleartext to $base\n";
     return $base;
 }
 sub main {
     my @args = @_;
-    my %o = (model=>$ENV{OPENAI_MODEL}, base=>$ENV{OPENAI_BASE_URL} // 'https://api.openai.com/v1',
+    my %o = (model=>$ENV{WALLE_MODEL}, base=>$ENV{WALLE_BASE_URL},
         timeout=>60, max_steps=>30);
     GetOptionsFromArray(\@args, 'model=s'=>\$o{model}, 'base-url=s'=>\$o{base}, 'reasoning=s'=>\$o{reasoning},
         'allow-http'=>\$o{allow_http}, 'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
@@ -193,12 +194,14 @@ sub main {
         print "Usage: wall-e --model MODEL [--yes] [--reasoning EFFORT] [TASK ...]\n",
             "No task: interactive chat on a terminal, or read task from stdin.\n",
             "Options: --base-url URL --allow-http --timeout SECONDS --max-steps N\n",
-            "Environment: OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL\n",
+            "Environment: WALLE_BASE_URL, WALLE_MODEL, WALLE_API_KEY (optional)\n",
             "Commands: /new (clear context), /quit. Mutating tools require approval.\n";
         return 0;
     }
-    die "Set OPENAI_MODEL or pass --model with your API model ID\n" unless $o{model};
-    $o{key} = $ENV{OPENAI_API_KEY} or die "Set OPENAI_API_KEY\n";
+    die "Set WALLE_BASE_URL or pass --base-url (e.g. https://api.openai.com/v1)\n" unless $o{base};
+    die "Set WALLE_MODEL or pass --model with your API model ID\n" unless $o{model};
+    # Only WALLE_API_KEY is used, so a provider key exported for other tools is never sent elsewhere.
+    $o{key} = $ENV{WALLE_API_KEY} if defined $ENV{WALLE_API_KEY} && length $ENV{WALLE_API_KEY};
     die "timeout and max-steps must be positive\n" unless $o{timeout}>0 && $o{max_steps}>0;
     $o{base} = check_base($o{base}, $o{allow_http});
     $o{http} = HTTP::Tiny->new(timeout=>180, verify_SSL=>1, max_redirect=>0);

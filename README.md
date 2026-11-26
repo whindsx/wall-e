@@ -3,8 +3,9 @@
 **A small coding robot, written in Perl.**
 
 wall-e is a Linux-first, CLI-only coding agent. Give it a task and it can read
-files, make changes, run commands, and work through the results using your
-OpenAI API key.
+files, make changes, run commands, and work through the results using any
+model server that speaks the OpenAI-style Responses API: a local llama.cpp
+server or a hosted provider.
 
 Named for **Larry Wall** and **WALL-E**: a little robot that gets to work.
 
@@ -42,7 +43,8 @@ service. The executable connects to the endpoint you configure.
 ## Requirements
 
 - Linux with Perl **5.20+** and `/bin/sh`.
-- An API key and model supporting OpenAI Responses function tools.
+- An endpoint and model supporting Responses API function tools, plus an API
+  key if your provider requires one.
 - The Perl modules below, including their dependencies.
 
 | Module | Minimum version | Purpose |
@@ -70,16 +72,18 @@ dependency is a planned change; it is not implemented in this version.
 From the source directory, after installing the dependencies:
 
 ```sh
-export OPENAI_API_KEY='your-api-key'
-export OPENAI_MODEL='your-api-model-id'
+export WALLE_BASE_URL='https://api.openai.com/v1'   # or your own server
+export WALLE_MODEL='your-api-model-id'
+export WALLE_API_KEY='your-api-key'                 # omit if not required
 
 ./wall-e --help
 ./wall-e 'Explain this repository'
 ```
 
-Use the exact API model ID available to your account. The intended target is
-OpenAI 5.6-generation models and later; support depends on the selected model's
-Responses API and tool capabilities, rather than a version-number check.
+There is no default endpoint: wall-e only connects where you tell it to. Use
+the exact model ID your server or account offers. Results depend on the
+model's tool-calling ability; local models need a server and chat template
+that return function calls (for llama.cpp, typically `--jinja`).
 
 To put the executable on your PATH:
 
@@ -150,8 +154,8 @@ interactive stdin.
 
 | Option | Environment / default |
 | --- | --- |
-| `--model MODEL` | `OPENAI_MODEL`; required |
-| `--base-url URL` | `OPENAI_BASE_URL`; defaults to `https://api.openai.com/v1` |
+| `--base-url URL` | `WALLE_BASE_URL`; required, no default |
+| `--model MODEL` | `WALLE_MODEL`; required |
 | `--allow-http` | Permit plain HTTP to a non-local `--base-url`; off by default |
 | `--reasoning EFFORT` | Omitted by default; passed through to the selected model |
 | `--yes`, `-y` | Approve shell calls and file changes automatically |
@@ -159,15 +163,19 @@ interactive stdin.
 | `--max-steps N` | API calls per user turn; default `30` |
 | `--help`, `-h` | Show usage and exit |
 
-Set the API key through `OPENAI_API_KEY`. wall-e does not save it to a
-configuration file. Shell commands inherit the process environment, including
-that key.
+Set an API key, if your provider needs one, through `WALLE_API_KEY`; without it
+no `Authorization` header is sent. wall-e deliberately ignores `OPENAI_API_KEY`
+and other provider variables, so a key exported for other tools is never sent
+to a server you point wall-e at. It does not save the key to a configuration
+file, and removes `WALLE_API_KEY` from the environment of shell commands. Shell
+commands otherwise inherit the process environment, including any other
+secrets in it.
 
-Custom endpoints must support `/responses`. HTTPS is required, except for HTTP
+Endpoints must support `/responses`. HTTPS is required, except for HTTP
 on `localhost` or `127.0.0.1`. To use a plain-HTTP server elsewhere, such as a
 local model on your LAN, pass `--allow-http` on the command line; there is no
 environment variable or config file for it. wall-e then prints a warning, since
-prompts, file contents, command output and the API key travel unencrypted. Use
+prompts, file contents, command output and any API key travel unencrypted. Use
 it only on a network you trust. TLS certificate verification is enabled
 and HTTP redirects are disabled. HTTP requests have a 180-second timeout and
 are not automatically retried.
