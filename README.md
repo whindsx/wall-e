@@ -16,29 +16,7 @@ with one Perl executable, four tools, and a direct connection to your model
 provider. No Node.js, npm, OpenAI SDK, or agent framework.
 
 The goal is a small dependency tree and source you can actually read. Fewer
-moving parts mean fewer things to install, update, audit, and trust. That reduces
-the attack surface; it does not make the software immune to vulnerabilities.
-
-wall-e's security focus is the software you install. What you build, which
-commands you authorize, and how you isolate the agent are up to you.
-
-## Current status
-
-Early prototype. The core agent loop and tools have automated tests, but live
-API compatibility has not yet been verified with an account. This is a starting
-point, not a hardened release.
-
-Implemented:
-
-- One-shot tasks from the command line or piped stdin.
-- OpenAI Responses API with function tools and optional reasoning effort.
-- File reading, writing, exact-text editing, and shell execution.
-- Approval prompts, with `--yes` for unattended execution.
-- Command timeouts, bounded tool output, and a per-turn step limit.
-- Root `AGENTS.md` instructions.
-
-No telemetry, automatic updates, plugin downloads, provider relay, or background
-service. The executable connects to the endpoint you configure.
+moving parts mean fewer things to install, update, audit, and trust.
 
 ## Requirements
 
@@ -52,17 +30,16 @@ service. The executable connects to the endpoint you configure.
 | `HTTP::Tiny` | 0.080 | HTTP requests; part of Perl core, although older installations may need an update |
 | `IO::Socket::SSL` | 2.056 | HTTPS support |
 
-All other modules used by the executable are Perl core modules. Tests use core
-`Test::More` and temporary files/processes.
+All other modules used by the executable are Perl core modules.
 
 Prefer packages from your distribution's repositories:
 
 | Distribution | Command |
 | --- | --- |
-| Debian, Ubuntu | `sudo apt install perl libio-socket-ssl-perl ca-certificates` |
-| Fedora, RHEL | `sudo dnf install perl perl-IO-Socket-SSL ca-certificates` |
-| Arch | `sudo pacman -S perl perl-io-socket-ssl ca-certificates` |
-| Alpine | `sudo apk add perl perl-io-socket-ssl ca-certificates` |
+| Debian, Ubuntu | `sudo apt install perl libio-socket-ssl-perl` |
+| Fedora, RHEL | `sudo dnf install perl perl-IO-Socket-SSL` |
+| Arch | `sudo pacman -S perl perl-io-socket-ssl` |
+| Alpine | `sudo apk add perl perl-io-socket-ssl` |
 
 On Fedora and RHEL, install the full `perl` package, not just
 `perl-interpreter`, so the core modules are present. `HTTP::Tiny` 0.080 ships
@@ -72,11 +49,6 @@ of everything is also supported:
 ```sh
 cpanm --installdeps .
 ```
-
-HTTPS certificates are verified against the operating system's CA bundle (for
-example `/etc/ssl/certs/ca-certificates.crt`), found by `HTTP::Tiny`. Set
-`SSL_CERT_FILE` to use a different bundle. If `Mozilla::CA` happens to be
-installed, `HTTP::Tiny` prefers it; it is not required.
 
 ## Quick start
 
@@ -123,20 +95,15 @@ wall-e --yes 'Run the tests and fix the failure'
 printf '%s\n' 'Explain this repository' | wall-e
 ```
 
-wall-e runs one task per invocation and exits; there is no interactive chat
-mode. When a task argument is supplied, it is used as the prompt. Stdin is read
+When a task argument is supplied, it is used as the prompt. Stdin is read
 as the task only when no task argument is supplied and stdin is not a terminal.
 A piped task leaves no terminal for approvals, so that run is read-only unless
 `--yes` is set.
 
 ## Terminal behavior
 
-Output stays in the terminal's normal scrollback. There is no mouse interface,
-alternate-screen layout, or fullscreen dashboard. Your terminal emulator
-controls the scrollback buffer size.
-
 Model text goes to stdout. Tool activity, approval prompts, and errors go to
-stderr. Responses currently print when each API request completes.
+stderr.
 
 When stdout is a terminal, wall-e formats the model's Markdown with basic ANSI
 styling: bold and headings, colored code, bullets, aligned tables, and code
@@ -244,27 +211,3 @@ timeout or observed 1 MiB capture limit is reached. Process-group cleanup does
 not contain deliberately detached processes, and these limits are not OS
 resource quotas.
 
-## Development
-
-```sh
-perl -c wall-e
-prove -v t
-```
-
-The tests use a mock HTTP client and real temporary files/processes. They do
-not require an API key or spend tokens. They cover the tool loop, Unicode,
-reasoning replay, denied actions, edit failures, command capture, timeouts,
-output truncation, and the step limit.
-
-Keep changes small, dependencies justified, and behavior visible. No build
-pipeline is needed to run the executable.
-
-## Direction
-
-Near-term improvements should preserve the small, Linux-first distribution:
-
-- Streaming text in the terminal's normal scrollback.
-- A replaceable or removable built-in prompt.
-
-These are planned, not current command-line features. There is no bundled
-plugin marketplace, executable project extension system, or self-updater.
