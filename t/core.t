@@ -113,6 +113,19 @@ is(plain("`**raw**` and snake_case_name and 2*3*4"), "**raw** and snake_case_nam
 is(plain("```perl\nmy \$x = '**y**';\n```"), "    my \$x = '**y**';\n", 'fences dropped, code indented verbatim');
 is(plain("| A | Bee |\n|---|:---:|\n| long | 1 |"), "A    │ Bee\n─────┼────\nlong │ 1\n", 'table aligned, divider redrawn');
 is(plain('See [docs](https://x.y).'), "See docs (https://x.y).\n", 'link shows text and URL');
+# Approval prompts: readable, complete on request, and nothing hidden.
+is((approval_text('shell', {command=>"cd x &&\nmake"}, 0, 0))[0], "Run shell command:\n  \$ cd x &&\n    make\n", 'shell prompt');
+is((approval_text('edit', {path=>'f', old=>'a - b', new=>'a + b'}, 0, 0))[0], "Edit file: f\n  - a - b\n  + a + b\n", 'edit prompt');
+is((approval_text('write', {path=>'new.txt', content=>"x\n"}, 0, 0))[0], "Write file: new.txt (new file, 1 line)\n  1 │ x\n", 'write prompt');
+{
+    my $big = join '', map { "$_\n" } 1..50;
+    my ($short, $more) = approval_text('write', {path=>'n', content=>$big}, 0, 0);
+    ok($more && $short =~ /… 10 more lines/ && $short !~ /\b41\n/, 'long content truncated with notice');
+    my ($all, $more_all) = approval_text('write', {path=>'n', content=>$big}, 1, 0);
+    ok(!$more_all && $all =~ / 50\n/, 'view-all shows everything');
+}
+like((approval_text('shell', {command=>"echo ok\e[2K\rrm -rf ~ \x{202e}x"}, 0, 0))[0], qr/\\x\{1b\}\[2K\\x\{d\}rm -rf ~ \\x\{202e\}x/, 'control and bidi characters escaped');
+like((approval_text('shell', {command=>'ls'}, 0, 1))[0], qr/\e\[1mRun shell command:/, 'color when enabled');
 # End to end: run the executable against a local server that asks for one write.
 sub serve {
     my @bodies = @_;

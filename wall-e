@@ -60,10 +60,51 @@ sub denial {
     return 'Not run: no terminal is available to ask the user for approval, and --yes is not set. ' .
         'Every shell command and file change will be refused the same way, so do not retry; ' .
         'finish with the read tool or report what you would have done.' unless -t STDIN;
-    print STDERR "\n$name ", JSON::PP->new->canonical->encode($args), "\nAllow? [y/N] ";
-    my $answer = <STDIN>;
+    my ($full, $answer) = (0);
+    while (1) {
+        my ($text, $more) = approval_text($name, $args, $full, color_ok(\*STDERR));
+        print STDERR "\n$text", 'Allow? [y/N', ($more ? ', v=view all' : ''), '] ';
+        $answer = <STDIN>;
+        last unless $more && defined($answer) && $answer =~ /^v\s*$/i;
+        $full = 1;
+    }
     return undef if defined($answer) && $answer =~ /^y(?:es)?\s*$/i;
     return 'User denied tool execution. Do not retry without a new user instruction.';
+}
+sub color_ok { my ($fh) = @_; return -t $fh && !length($ENV{NO_COLOR} // '') && ($ENV{TERM} // '') ne 'dumb' }
+# Show control and bidirectional characters as escapes so nothing hides in what is approved.
+sub visible {
+    my ($t) = @_;
+    $t =~ s/([\x00-\x08\x0b-\x1f\x7f\x{200b}-\x{200f}\x{202a}-\x{202e}\x{2066}-\x{2069}\x{feff}])/sprintf('\\x{%x}', ord $1)/ge;
+    return $t;
+}
+sub approval_text {
+    my ($name, $a, $full, $color) = @_;
+    my $st = sub { $color ? style(@_) : $_[1] };
+    my $limit = $full ? 1e9 : 40;
+    my $more = 0;
+    my $lines = sub {
+        my ($text, $prefix) = @_;
+        my @l = split /\n/, visible($text), -1;
+        pop @l if @l > 1 && $l[-1] eq '';
+        my $out = join '', map { $prefix->($_) . "$l[$_]\n" } 0..($#l < $limit ? $#l : $limit - 1);
+        if (@l > $limit) { $more = 1; $out .= '  ' . $st->('d', '… ' . (@l - $limit) . ' more lines') . "\n" }
+        return ($out, scalar @l);
+    };
+    my $path = $st->('b', visible($a->{path} // ''));
+    if ($name eq 'shell') {
+        my ($body) = $lines->($a->{command}, sub { $_[0] ? '    ' : '  ' . $st->('c', '$') . ' ' });
+        return ($st->('b', 'Run shell command:') . "\n$body", $more);
+    }
+    if ($name eq 'write') {
+        my $w = length(scalar(() = $a->{content} =~ /\n/g) + 1);
+        my ($body, $n) = $lines->($a->{content}, sub { '  ' . $st->('d', sprintf("%${w}d │", $_[0] + 1)) . ' ' });
+        my $what = -e $a->{path} ? 'overwrites existing file' : 'new file';
+        return ("Write file: $path ($what, $n line" . ($n == 1 ? '' : 's') . ")\n$body", $more);
+    }
+    my ($old) = $lines->($a->{old}, sub { '  ' . $st->('r', '-') . ' ' });
+    my ($new) = $lines->($a->{new}, sub { '  ' . $st->('g', '+') . ' ' });
+    return ("Edit file: $path\n$old$new", $more);
 }
 sub shell {
     my ($self, $command) = @_;
@@ -121,7 +162,8 @@ sub execute {
         my %fields = (read=>['path'], write=>['path','content'], edit=>['path','old','new'], shell=>['command']);
         die "Unknown tool: $name\n" unless $fields{$name};
         for (@{$fields{$name}}) { die "Missing/string argument required: $_\n" if !defined($a->{$_}) || ref($a->{$_}) }
-        print STDERR "[$name] ", ($a->{path} // $a->{command}), "\n";
+        # The approval prompt shows the details itself; otherwise log the call.
+        print STDERR "[$name] ", visible($a->{path} // $a->{command}), "\n" if $name eq 'read' || $self->{yes} || !-t STDIN;
         if ($name ne 'read' and my $why = denial($self, $name, $a)) { $self->{denied}++; return {error=>$why} }
         return {output=>read_file($a->{path}, 65536)} if $name eq 'read';
         return {output=>write_file($a->{path}, $a->{content})} if $name eq 'write';
@@ -156,7 +198,7 @@ sub request {
     return $data;
 }
 # Minimal Markdown-to-ANSI for terminals. Line based; piped output stays raw.
-my %ansi = (b=>["\e[1m","\e[22m"], i=>["\e[3m","\e[23m"], d=>["\e[2m","\e[22m"], c=>["\e[36m","\e[39m"], u=>["\e[4m","\e[24m"]);
+my %ansi = (b=>["\e[1m","\e[22m"], i=>["\e[3m","\e[23m"], d=>["\e[2m","\e[22m"], c=>["\e[36m","\e[39m"], u=>["\e[4m","\e[24m"], r=>["\e[31m","\e[39m"], g=>["\e[32m","\e[39m"]);
 sub style { my ($s, $t) = @_; return $ansi{$s}[0] . $t . $ansi{$s}[1] }
 sub visible_length { my ($t) = @_; $t =~ s/\e\[[0-9;]*m//g; return length $t }
 sub inline {
