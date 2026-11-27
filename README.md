@@ -51,21 +51,32 @@ service. The executable connects to the endpoint you configure.
 | --- | --- | --- |
 | `HTTP::Tiny` | 0.080 | HTTP requests; part of Perl core, although older installations may need an update |
 | `IO::Socket::SSL` | 2.056 | HTTPS support |
-| `Mozilla::CA` | Unspecified | CA certificate bundle; currently declared in `cpanfile` |
 
 All other modules used by the executable are Perl core modules. Tests use core
 `Test::More` and temporary files/processes.
 
-Prefer packages from your distribution's repositories. Package names and
-versions vary by distribution and release; check the installed module versions
-against `cpanfile`. CPAN installation is also supported:
+Prefer packages from your distribution's repositories:
+
+| Distribution | Command |
+| --- | --- |
+| Debian, Ubuntu | `sudo apt install perl libio-socket-ssl-perl ca-certificates` |
+| Fedora, RHEL | `sudo dnf install perl perl-IO-Socket-SSL ca-certificates` |
+| Arch | `sudo pacman -S perl perl-io-socket-ssl ca-certificates` |
+| Alpine | `sudo apk add perl perl-io-socket-ssl ca-certificates` |
+
+On Fedora and RHEL, install the full `perl` package, not just
+`perl-interpreter`, so the core modules are present. `HTTP::Tiny` 0.080 ships
+with Perl 5.36 and later; on older Perl, update it from CPAN. CPAN installation
+of everything is also supported:
 
 ```sh
 cpanm --installdeps .
 ```
 
-Using the operating system's CA trust store without an explicit `Mozilla::CA`
-dependency is a planned change; it is not implemented in this version.
+HTTPS certificates are verified against the operating system's CA bundle (for
+example `/etc/ssl/certs/ca-certificates.crt`), found by `HTTP::Tiny`. Set
+`SSL_CERT_FILE` to use a different bundle. If `Mozilla::CA` happens to be
+installed, `HTTP::Tiny` prefers it; it is not required.
 
 ## Quick start
 
@@ -91,6 +102,8 @@ To put the executable on your PATH:
 mkdir -p "$HOME/.local/bin"
 install -m 755 wall-e "$HOME/.local/bin/wall-e"
 ```
+
+To uninstall, delete that file.
 
 Then work from your project directory:
 
@@ -260,7 +273,6 @@ pipeline is needed to run the executable.
 
 Near-term improvements should preserve the small, Linux-first distribution:
 
-- Distro-native CA trust and fewer explicit CPAN dependencies.
 - Streaming text in the terminal's normal scrollback.
 - Optional line editing and prompt history.
 - A replaceable or removable built-in prompt.
