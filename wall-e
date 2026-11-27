@@ -293,13 +293,14 @@ sub main {
     GetOptionsFromArray(\@args, 'model=s'=>\$o{model}, 'base-url=s'=>\$o{base}, 'reasoning=s'=>\$o{reasoning},
         'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
     if ($o{help}) {
-        print "Usage: wall-e --model MODEL [--yes] [--reasoning EFFORT] [TASK ...]\n",
-            "No task: interactive chat on a terminal, or read task from stdin.\n",
+        print "Usage: wall-e [--model MODEL] [--yes] [--reasoning EFFORT] TASK ...\n",
+            "Runs one task and exits. With no TASK argument, the task is read from piped stdin.\n",
             "Options: --base-url URL --timeout SECONDS --max-steps N\n",
             "Environment: WALLE_BASE_URL, WALLE_MODEL, WALLE_API_KEY (optional)\n",
-            "Commands: /new (clear context), /quit. Mutating tools require approval.\n";
+            "Shell commands and file changes require approval on a terminal, or --yes.\n";
         return 0;
     }
+    die "No task: pass it as an argument, or pipe it on stdin. See --help\n" unless @args || !-t STDIN;
     die "Set WALLE_BASE_URL or pass --base-url (e.g. https://api.openai.com/v1)\n" unless $o{base};
     die "Set WALLE_MODEL or pass --model with your API model ID\n" unless $o{model};
     # Only WALLE_API_KEY is used, so a provider key exported for other tools is never sent elsewhere.
@@ -323,32 +324,13 @@ sub main {
         print STDERR "Read-only: no terminal for approval and no --yes, so the model can only read files\n";
     }
     if (-f 'AGENTS.md') { $o{instructions} .= "\nRoot project instructions:\n" . read_file('AGENTS.md', 65536) }
-    my @history;
-    if (@args || !-t STDIN) {
-        my $prompt = @args ? join(' ', @args) : do { local $/; <STDIN> };
-        die "Empty task\n" unless defined($prompt) && $prompt =~ /\S/;
-        turn(\%o, \@history, $prompt);
-        # Denied actions mean the task did not run as asked; let scripts see that.
-        if ($o{denied}) {
-            print STDERR "$o{denied} tool call(s) denied", (-t STDIN ? '' : ' (no terminal for approval; use --yes)'), "\n";
-            return 2;
-        }
-        return 0;
-    }
-    print STDERR "wall-e ($o{model}) — /new, /quit; Ctrl-C exits\n";
-    while (1) {
-        print STDERR "\nyou> ";
-        my $line = <STDIN>;
-        last unless defined $line;
-        chomp $line;
-        last if $line eq '/quit';
-        if ($line eq '/new') { @history = (); next }
-        next unless $line =~ /\S/;
-        # A failed turn may contain incomplete tool history: clear it explicitly.
-        eval { turn(\%o, \@history, $line); 1 } or do {
-            print STDERR $@, "Context cleared after error.\n";
-            @history = ();
-        };
+    my $prompt = @args ? join(' ', @args) : do { local $/; <STDIN> };
+    die "Empty task\n" unless defined($prompt) && $prompt =~ /\S/;
+    turn(\%o, [], $prompt);
+    # Denied actions mean the task did not run as asked; let scripts see that.
+    if ($o{denied}) {
+        print STDERR "$o{denied} tool call(s) denied", (-t STDIN ? '' : ' (no terminal for approval; use --yes)'), "\n";
+        return 2;
     }
     return 0;
 }

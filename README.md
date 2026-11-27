@@ -30,12 +30,12 @@ point, not a hardened release.
 
 Implemented:
 
-- Interactive conversation and one-shot tasks.
+- One-shot tasks from the command line or piped stdin.
 - OpenAI Responses API with function tools and optional reasoning effort.
 - File reading, writing, exact-text editing, and shell execution.
 - Approval prompts, with `--yes` for unattended execution.
 - Command timeouts, bounded tool output, and a per-turn step limit.
-- In-memory conversation history and root `AGENTS.md` instructions.
+- Root `AGENTS.md` instructions.
 
 No telemetry, automatic updates, plugin downloads, provider relay, or background
 service. The executable connects to the endpoint you configure.
@@ -110,9 +110,6 @@ Then work from your project directory:
 ```sh
 cd /path/to/project
 
-# Start an interactive conversation.
-wall-e
-
 # Complete one task and exit.
 wall-e 'Find the failing test and fix it'
 
@@ -126,8 +123,11 @@ wall-e --yes 'Run the tests and fix the failure'
 printf '%s\n' 'Explain this repository' | wall-e
 ```
 
-When a task argument is supplied, it is used as the prompt. Stdin is read as the
-task only when no task argument is supplied.
+wall-e runs one task per invocation and exits; there is no interactive chat
+mode. When a task argument is supplied, it is used as the prompt. Stdin is read
+as the task only when no task argument is supplied and stdin is not a terminal.
+A piped task leaves no terminal for approvals, so that run is read-only unless
+`--yes` is set.
 
 ## Terminal behavior
 
@@ -144,14 +144,6 @@ blocks without their fences. This is a small built-in formatter, not a full
 Markdown renderer. Piped or redirected output stays raw Markdown, so scripts
 and tools like `glow` see the original text. Set `NO_COLOR` (or use
 `TERM=dumb`) to get raw Markdown in the terminal too.
-
-In interactive mode:
-
-| Command | Action |
-| --- | --- |
-| `/new` | Clear conversation context |
-| `/quit` | Exit |
-| Ctrl-D | Exit at the input prompt |
 
 ## Tools
 
@@ -222,13 +214,11 @@ asked to read applicable nested `AGENTS.md` files; nested discovery is not
 programmatically enforced. Instruction files are read as text, not executed as
 extensions.
 
-Conversation history exists only in memory. API requests use `store: false` and
-replay response items, including encrypted reasoning and linked tool results.
-This flag is not a guarantee about a provider's broader retention policies.
-
-There is no automatic compaction or session resume. Use `/new` to start fresh.
-Interactive API or step-limit errors clear context; any actions already
-performed remain in effect.
+Each run starts with no history; nothing is saved between runs. Within a run,
+API requests use `store: false` and replay response items, including encrypted
+reasoning and linked tool results. This flag is not a guarantee about a
+provider's broader retention policies. If a run fails partway, any actions
+already performed remain in effect.
 
 One-shot runs exit `0` on success and `1` on errors (API failure, step limit,
 bad options). They exit `2` if any shell call or file change was denied,
@@ -274,7 +264,6 @@ pipeline is needed to run the executable.
 Near-term improvements should preserve the small, Linux-first distribution:
 
 - Streaming text in the terminal's normal scrollback.
-- Optional line editing and prompt history.
 - A replaceable or removable built-in prompt.
 
 These are planned, not current command-line features. There is no bundled
