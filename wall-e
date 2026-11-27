@@ -63,7 +63,7 @@ sub denial {
     my ($full, $answer) = (0);
     while (1) {
         my ($text, $more) = approval_text($name, $args, $full, color_ok(\*STDERR));
-        print STDERR "\n$text", 'Allow? [y/N', ($more ? ', v=view all' : ''), '] ';
+        print STDERR "\n$text", 'Allow? [y/N', ($more ? ", v=show all $more lines" : ''), '] ';
         $answer = <STDIN>;
         last unless $more && defined($answer) && $answer =~ /^v\s*$/i;
         $full = 1;
@@ -82,11 +82,13 @@ sub approval_text {
     my ($name, $a, $full, $color) = @_;
     my $st = sub { $color ? style(@_) : $_[1] };
     my $limit = $full ? 1e9 : 40;
-    my $more = 0;
+    # $more ends up as the total line count when anything was cut, else 0.
+    my ($more, $total) = (0, 0);
     my $lines = sub {
         my ($text, $prefix) = @_;
         my @l = split /\n/, visible($text), -1;
         pop @l if @l > 1 && $l[-1] eq '';
+        $total += @l;
         my $out = join '', map { $prefix->($_) . "$l[$_]\n" } 0..($#l < $limit ? $#l : $limit - 1);
         if (@l > $limit) { $more = 1; $out .= '  ' . $st->('d', '… ' . (@l - $limit) . ' more lines') . "\n" }
         return ($out, scalar @l);
@@ -94,17 +96,17 @@ sub approval_text {
     my $path = $st->('b', visible($a->{path} // ''));
     if ($name eq 'shell') {
         my ($body) = $lines->($a->{command}, sub { $_[0] ? '    ' : '  ' . $st->('c', '$') . ' ' });
-        return ($st->('b', 'Run shell command:') . "\n$body", $more);
+        return ($st->('b', 'Run shell command:') . "\n$body", $more && $total);
     }
     if ($name eq 'write') {
         my $w = length(scalar(() = $a->{content} =~ /\n/g) + 1);
         my ($body, $n) = $lines->($a->{content}, sub { '  ' . $st->('d', sprintf("%${w}d │", $_[0] + 1)) . ' ' });
         my $what = -e $a->{path} ? 'overwrites existing file' : 'new file';
-        return ("Write file: $path ($what, $n line" . ($n == 1 ? '' : 's') . ")\n$body", $more);
+        return ("Write file: $path ($what, $n line" . ($n == 1 ? '' : 's') . ")\n$body", $more && $total);
     }
     my ($old) = $lines->($a->{old}, sub { '  ' . $st->('r', '-') . ' ' });
     my ($new) = $lines->($a->{new}, sub { '  ' . $st->('g', '+') . ' ' });
-    return ("Edit file: $path\n$old$new", $more);
+    return ("Edit file: $path\n$old$new", $more && $total);
 }
 sub shell {
     my ($self, $command) = @_;

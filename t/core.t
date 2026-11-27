@@ -120,7 +120,8 @@ is((approval_text('write', {path=>'new.txt', content=>"x\n"}, 0, 0))[0], "Write 
 {
     my $big = join '', map { "$_\n" } 1..50;
     my ($short, $more) = approval_text('write', {path=>'n', content=>$big}, 0, 0);
-    ok($more && $short =~ /… 10 more lines/ && $short !~ /\b41\n/, 'long content truncated with notice');
+    ok($short =~ /… 10 more lines/ && $short !~ /\b41\n/, 'long content truncated with notice');
+    is($more, 50, 'total line count returned for the show-all label');
     my ($all, $more_all) = approval_text('write', {path=>'n', content=>$big}, 1, 0);
     ok(!$more_all && $all =~ / 50\n/, 'view-all shows everything');
 }

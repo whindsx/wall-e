@@ -152,6 +152,15 @@ In interactive mode:
 Read calls run automatically. Shell calls and file changes require `y` or `yes`
 unless `--yes` is set. Tool failures and denials are returned to the model.
 
+Approval prompts show what will happen: the command for `shell`, the path and
+numbered content for `write` (noting whether it overwrites an existing file),
+and removed (`-`) and added (`+`) lines for `edit`. Control characters and
+Unicode direction overrides are shown as `\x{..}` escapes, so text cannot hide
+in a prompt. Content longer than 40 lines is cut off with a `… N more lines`
+note, and the prompt offers `v=show all N lines`: answer `v` to print the full
+content, then answer `y` or `n`. Any answer other than `y`, `yes` or `v` denies
+the action.
+
 Without a terminal to ask on, and without `--yes`, the run is read-only: the
 model is offered only the `read` tool and told it cannot run commands or change
 files, and wall-e notes this on stderr. Any other tool call it makes anyway is
