@@ -105,6 +105,14 @@ like((eval { check_base('ftp://gpu-box/v1', 1) }, $@), qr/https:\/\//, 'other sc
     is(check_base('http://gpu-box:8080/v1', 1), 'http://gpu-box:8080/v1', 'remote HTTP allowed explicitly');
     like($warn, qr/cleartext/, 'explicit HTTP warns');
 }
+# Terminal Markdown rendering.
+sub plain { my $t = render_markdown(@_); $t =~ s/\e\[[0-9;]*m//g; return $t }
+is(render_markdown('**hi** `x`'), "\e[1mhi\e[22m \e[36mx\e[39m\n", 'bold and code spans styled');
+is(plain("# Title\n- item"), "Title\n• item\n", 'heading marks removed, bullets drawn');
+is(plain("`**raw**` and snake_case_name and 2*3*4"), "**raw** and snake_case_name and 2*3*4\n", 'code spans and stray markers untouched');
+is(plain("```perl\nmy \$x = '**y**';\n```"), "    my \$x = '**y**';\n", 'fences dropped, code indented verbatim');
+is(plain("| A | Bee |\n|---|:---:|\n| long | 1 |"), "A    │ Bee\n─────┼────\nlong │ 1\n", 'table aligned, divider redrawn');
+is(plain('See [docs](https://x.y).'), "See docs (https://x.y).\n", 'link shows text and URL');
 # End to end: run the executable against a local server that asks for one write.
 sub serve {
     my @bodies = @_;

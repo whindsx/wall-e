@@ -125,6 +125,13 @@ controls the scrollback buffer size.
 Model text goes to stdout. Tool activity, approval prompts, and errors go to
 stderr. Responses currently print when each API request completes.
 
+When stdout is a terminal, wall-e formats the model's Markdown with basic ANSI
+styling: bold and headings, colored code, bullets, aligned tables, and code
+blocks without their fences. This is a small built-in formatter, not a full
+Markdown renderer. Piped or redirected output stays raw Markdown, so scripts
+and tools like `glow` see the original text. Set `NO_COLOR` (or use
+`TERM=dumb`) to get raw Markdown in the terminal too.
+
 In interactive mode:
 
 | Command | Action |
@@ -247,7 +254,6 @@ pipeline is needed to run the executable.
 Near-term improvements should preserve the small, Linux-first distribution:
 
 - Distro-native CA trust and fewer explicit CPAN dependencies.
-- Optional ANSI colors that respect redirected output and `NO_COLOR`.
 - Streaming text in the terminal's normal scrollback.
 - Optional line editing and prompt history.
 - A replaceable or removable built-in prompt.
