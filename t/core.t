@@ -94,16 +94,18 @@ $agent->{http}=bless {requests=>[]}, 'MockHTTP';
 eval { turn($agent, [], 'read again') };
 like($@,qr/Step limit/,'loop budget enforced');
 is(check_base('https://api.example.com/v1/'), 'https://api.example.com/v1', 'HTTPS accepted, slash trimmed');
-is(check_base('http://localhost:8080/v1'), 'http://localhost:8080/v1', 'HTTP localhost accepted');
-like((eval { check_base('http://gpu-box:8080/v1') }, $@), qr/--allow-http/, 'remote HTTP refused by default');
-like((eval { check_base('http://localhost.evil.com/v1') }, $@), qr/--allow-http/, 'localhost prefix is not local');
-like((eval { check_base('ftp://gpu-box/v1', 1) }, $@), qr/https:\/\//, 'other schemes refused');
+like((eval { check_base('ftp://gpu-box/v1') }, $@), qr/https:\/\//, 'other schemes refused');
 {
     my $warn = '';
     open my $err, '>', \$warn or die $!;
     local *STDERR = $err;
-    is(check_base('http://gpu-box:8080/v1', 1), 'http://gpu-box:8080/v1', 'remote HTTP allowed explicitly');
-    like($warn, qr/cleartext/, 'explicit HTTP warns');
+    is(check_base('http://localhost:8080/v1'), 'http://localhost:8080/v1', 'HTTP localhost accepted');
+    is($warn, '', 'localhost HTTP does not warn');
+    is(check_base('http://gpu-box:8080/v1'), 'http://gpu-box:8080/v1', 'remote HTTP accepted');
+    like($warn, qr/cleartext/, 'remote HTTP warns');
+    $warn = '';
+    check_base('http://localhost.evil.com/v1');
+    like($warn, qr/cleartext/, 'localhost prefix is not treated as local');
 }
 # Terminal Markdown rendering.
 sub plain { my $t = render_markdown(@_); $t =~ s/\e\[[0-9;]*m//g; return $t }

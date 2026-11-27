@@ -176,7 +176,6 @@ interactive stdin.
 | --- | --- |
 | `--base-url URL` | `WALLE_BASE_URL`; required, no default |
 | `--model MODEL` | `WALLE_MODEL`; required |
-| `--allow-http` | Permit plain HTTP to a non-local `--base-url`; off by default |
 | `--reasoning EFFORT` | Omitted by default; passed through to the selected model |
 | `--yes`, `-y` | Approve shell calls and file changes automatically |
 | `--timeout N` | Shell timeout in seconds; default `60` |
@@ -191,12 +190,11 @@ file, and removes `WALLE_API_KEY` from the environment of shell commands. Shell
 commands otherwise inherit the process environment, including any other
 secrets in it.
 
-Endpoints must support `/responses`. HTTPS is required, except for HTTP
-on `localhost` or `127.0.0.1`. To use a plain-HTTP server elsewhere, such as a
-local model on your LAN, pass `--allow-http` on the command line; there is no
-environment variable or config file for it. wall-e then prints a warning, since
-prompts, file contents, command output and any API key travel unencrypted. Use
-it only on a network you trust. TLS certificate verification is enabled
+Endpoints must support `/responses` and use `https://` or `http://`. Plain
+HTTP works, for example for a local model on your LAN, but for any host other
+than `localhost` or `127.0.0.1` wall-e prints a warning on each start: prompts,
+file contents, command output and any API key travel unencrypted. Use it only
+on a network you trust. TLS certificate verification is enabled
 and HTTP redirects are disabled. HTTP requests have a 180-second timeout and
 are not automatically retried.
 

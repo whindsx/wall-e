@@ -278,12 +278,11 @@ sub turn {
     die "Step limit reached. Start a new task or increase --max-steps.\n";
 }
 sub check_base {
-    my ($base, $allow_http) = @_;
+    my ($base) = @_;
     $base =~ s{/+$}{};
     return $base if $base =~ m{\Ahttps://[^/]}i;
-    die "Base URL must use https:// (or http:// with --allow-http)\n" unless $base =~ m{\Ahttp://[^/]}i;
+    die "Base URL must start with https:// or http://\n" unless $base =~ m{\Ahttp://[^/]}i;
     return $base if $base =~ m{\Ahttp://(?:localhost|127\.0\.0\.1)(?::\d+)?(?:/|$)}i;
-    die "Refusing unencrypted HTTP to a non-local host; pass --allow-http to permit it\n" unless $allow_http;
     print STDERR "Warning: unencrypted HTTP; prompts, tool output and any API key are sent in cleartext to $base\n";
     return $base;
 }
@@ -292,11 +291,11 @@ sub main {
     my %o = (model=>$ENV{WALLE_MODEL}, base=>$ENV{WALLE_BASE_URL},
         timeout=>60, max_steps=>30);
     GetOptionsFromArray(\@args, 'model=s'=>\$o{model}, 'base-url=s'=>\$o{base}, 'reasoning=s'=>\$o{reasoning},
-        'allow-http'=>\$o{allow_http}, 'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
+        'yes|y'=>\$o{yes}, 'timeout=i'=>\$o{timeout}, 'max-steps=i'=>\$o{max_steps}, 'help|h'=>\$o{help}) or die "Use --help\n";
     if ($o{help}) {
         print "Usage: wall-e --model MODEL [--yes] [--reasoning EFFORT] [TASK ...]\n",
             "No task: interactive chat on a terminal, or read task from stdin.\n",
-            "Options: --base-url URL --allow-http --timeout SECONDS --max-steps N\n",
+            "Options: --base-url URL --timeout SECONDS --max-steps N\n",
             "Environment: WALLE_BASE_URL, WALLE_MODEL, WALLE_API_KEY (optional)\n",
             "Commands: /new (clear context), /quit. Mutating tools require approval.\n";
         return 0;
@@ -306,7 +305,7 @@ sub main {
     # Only WALLE_API_KEY is used, so a provider key exported for other tools is never sent elsewhere.
     $o{key} = $ENV{WALLE_API_KEY} if defined $ENV{WALLE_API_KEY} && length $ENV{WALLE_API_KEY};
     die "timeout and max-steps must be positive\n" unless $o{timeout}>0 && $o{max_steps}>0;
-    $o{base} = check_base($o{base}, $o{allow_http});
+    $o{base} = check_base($o{base});
     # Format Markdown only for a person at a terminal; pipes and files get the raw text.
     $o{pretty} = -t STDOUT && !length($ENV{NO_COLOR} // '') && ($ENV{TERM} // '') ne 'dumb';
     $o{http} = HTTP::Tiny->new(timeout=>180, verify_SSL=>1, max_redirect=>0);
