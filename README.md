@@ -18,6 +18,9 @@ provider. No Node.js, npm, OpenAI SDK, or agent framework.
 The goal is a small dependency tree and source you can actually read. Fewer
 moving parts mean fewer things to install, update, audit, and trust.
 
+No telemetry, automatic updates, plugin downloads, provider relay, or background
+service. The executable connects to the endpoint you configure.
+
 ## Requirements
 
 - Linux with Perl **5.20+** and `/bin/sh`.
@@ -36,10 +39,10 @@ Prefer packages from your distribution's repositories:
 
 | Distribution | Command |
 | --- | --- |
-| Debian, Ubuntu | `sudo apt install perl libio-socket-ssl-perl` |
-| Fedora, RHEL | `sudo dnf install perl perl-IO-Socket-SSL` |
-| Arch | `sudo pacman -S perl perl-io-socket-ssl` |
-| Alpine | `sudo apk add perl perl-io-socket-ssl` |
+| Debian, Ubuntu | `sudo apt install perl libio-socket-ssl-perl ca-certificates` |
+| Fedora, RHEL | `sudo dnf install perl perl-IO-Socket-SSL ca-certificates` |
+| Arch | `sudo pacman -S perl perl-io-socket-ssl ca-certificates` |
+| Alpine | `sudo apk add perl perl-io-socket-ssl ca-certificates` |
 
 On Fedora and RHEL, install the full `perl` package, not just
 `perl-interpreter`, so the core modules are present. `HTTP::Tiny` 0.080 ships
